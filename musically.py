@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -13,6 +14,8 @@ from tkinter import filedialog, messagebox, ttk
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent
+# Keep the Playwright browser beside the app so the whole folder can live on a USB drive.
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(ROOT / "browser"))
 DOWNLOADS = ROOT / "Downloads"
 STEMS = ROOT / "Stems"
 DOWNLOADS.mkdir(exist_ok=True)
@@ -39,6 +42,9 @@ def unique_path(directory: Path, stem: str, suffix: str) -> Path:
     return p
 
 def ffmpeg_path():
+    bundled = ROOT / "ffmpeg.exe"
+    if bundled.exists():
+        return str(bundled)
     return shutil.which("ffmpeg")
 
 def ffmpeg_convert(source: Path, target: Path):
