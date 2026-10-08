@@ -1,0 +1,6 @@
+__pycache__/
+.venv/
+Downloads/
+Stems/
+*.pyc
+.DS_Store
