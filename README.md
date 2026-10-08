@@ -2,31 +2,71 @@
 
 A small local browser-audio capture utility.
 
-Musically opens its own Chromium browser, watches the browser's network traffic, and saves accessible audio media as MP3. It does NOT record the laptop speakers or microphone.
+Musically opens its own Chromium browser, watches the browser's network traffic, and saves accessible audio media as MP3. It does **not** record the laptop speakers or microphone.
 
-Use it only for audio you have the right or permission to save. It does not bypass DRM, decrypt protected media, defeat paywalls, or bypass access controls.
+## USB-ready Windows version
 
-Requirements:
-- Windows, macOS, or Linux
+The repository can build a self-contained Windows folder containing:
+
+- `Musically.exe`
+- its Playwright Chromium browser
+- `ffmpeg.exe`
+- `Downloads\\` for captured MP3s
+- `Stems\\` for optional stem separation
+
+Copy the resulting folder to a USB/external drive. Double-click **Musically.exe**. No Python installation is required for that packaged version.
+
+The first packaged build is produced by GitHub Actions as a ZIP artifact named **Musically-USB-Windows**.
+
+## What it does
+
+1. Start Musically.
+2. Musically opens a normal, visible Chromium browser.
+3. Navigate to the music site and press Play.
+4. Musically watches for audio/media requests delivered to that browser.
+5. Click **Capture Current Audio**.
+6. The accessible media is saved/converted to MP3 in `Downloads\\`.
+
+It captures the browser-delivered media itself. It does **not** use the microphone, Windows loopback audio, speaker recording, or a virtual sound card.
+
+## DRM / access-control boundary
+
+Musically is intentionally an **accessible-media downloader/converter**, not a DRM circumvention tool.
+
+It only attempts to use media that the browser has already been allowed to request. It does not:
+
+- decrypt DRM-protected media
+- crack encryption or license systems
+- defeat paywalls or subscriptions
+- bypass login/access controls
+- extract protected keys
+- patch or modify DRM systems
+
+If a site supplies encrypted/protected media, Musically should fail rather than defeat that protection. A site can also prohibit downloading in its terms even when media is technically accessible.
+
+Use it only for audio you have the right or permission to save.
+
+## Stem separation
+
+The **Split Selected MP3 into Stems** button is optional. The lightweight core does not bundle Demucs because its AI models are much larger. If Demucs is installed separately and available on PATH, Musically can invoke it to create separated stems.
+
+## Source/developer version
+
+For Windows development:
+
 - Python 3.10+
-- FFmpeg on PATH for conversion/remuxing
-- Playwright Chromium (installed by the launcher)
+- FFmpeg on PATH
+- Playwright Chromium
 
-Optional:
-- Demucs for AI stem separation. This is deliberately optional because the model is much larger than the core app.
+Run `run_musically.bat`.
 
-Quick start:
-- Windows: run run_musically.bat
-- macOS/Linux: chmod +x run_musically.sh && ./run_musically.sh
+For macOS/Linux development:
 
-Operation:
-1. Start Browser.
-2. Navigate to the site and press Play.
-3. Enter a filename.
-4. Click Capture Current Audio.
-5. MP3 files are saved in Downloads.
-6. Use Split Selected MP3 into Stems when Demucs is installed.
+`chmod +x run_musically.sh && ./run_musically.sh`
 
-The core project is intentionally one Python file plus one dependency. No server, database, account, or cloud service is required.
+The core project remains intentionally small: one Python application plus Playwright. No server, database, account, or cloud service is required.
 
-Important: some sites deliver encrypted or otherwise protected media. Musically will not circumvent those protections. Some sites also prohibit downloading in their terms.
+## Limitations
+
+Some sites use segmented, encrypted, authenticated, or otherwise protected delivery. Those cases may not be capturable, and Musically does not attempt to circumvent those protections. Some authenticated streams may also require browser-specific session state that a direct media fetch cannot reproduce.
+
