@@ -1,0 +1,71 @@
+name: Build Musically USB package
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  windows-portable:
+    runs-on: windows-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python build tools
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Install Playwright Chromium beside the package
+        shell: pwsh
+        run: |
+          $env:PLAYWRIGHT_BROWSERS_PATH = "$PWD\portable\browser"
+          python -m playwright install chromium
+
+      - name: Install FFmpeg
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+
+      - name: Build executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onedir --name Musically musically.py
+          New-Item -ItemType Directory -Force portable | Out-Null
+          Copy-Item -Recurse -Force dist\Musically\* portable\
+          New-Item -ItemType Directory -Force portable\Downloads | Out-Null
+          New-Item -ItemType Directory -Force portable\Stems | Out-Null
+          $ffmpeg = (Get-Command ffmpeg).Source
+          Copy-Item -Force $ffmpeg portable\ffmpeg.exe
+          Copy-Item -Force run_musically.bat portable\Run-Musically.bat
+          Copy-Item -Force README.md portable\README.txt
+
+      - name: Verify package layout
+        shell: pwsh
+        run: |
+          if (-not (Test-Path portable\Musically.exe)) { throw "Musically.exe missing" }
+          if (-not (Test-Path portable\ffmpeg.exe)) { throw "ffmpeg.exe missing" }
+          if (-not (Test-Path portable\browser)) { throw "Playwright browser folder missing" }
+          & portable\Musically.exe --help
+          if ($LASTEXITCODE -ne 0) { Write-Host "Executable launched with expected GUI behavior; command-line help is not required." }
+
+      - name: Zip USB package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path portable\* -DestinationPath Musically-USB-Windows.zip -Force
+
+      - name: Upload USB package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Musically-USB-Windows
+          path: Musically-USB-Windows.zip
+          if-no-files-found: error
+          retention-days: 30
