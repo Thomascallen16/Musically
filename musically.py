@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 import shutil
 import subprocess
@@ -123,7 +122,12 @@ class MusicallyApp:
             is_audio = any(ctype.startswith(t) for t in AUDIO_TYPES) or any(path.endswith(ext) for ext in AUDIO_EXTS)
             if not is_audio:
                 return
-            item = {"url":url,"content_type":ctype,"time":time.time(),"status":response.status}
+            length = 0
+            try:
+                length = int(headers.get("content-length") or 0)
+            except (TypeError, ValueError):
+                pass
+            item = {"url":url,"content_type":ctype,"time":time.time(),"status":response.status,"length":length}
             with self.lock:
                 if not any(x["url"] == url for x in self.media):
                     self.media.append(item)
@@ -138,7 +142,16 @@ class MusicallyApp:
             messagebox.showinfo("Musically","Start the browser first.")
             return
         with self.lock:
-            candidates = list(reversed(self.media))
+            candidates = sorted(
+                self.media,
+                key=lambda x: (
+                    1 if x["url"].lower().split("?")[0].endswith((".m3u8", ".mpd")) else 0,
+                    1 if x["content_type"].startswith(("application/vnd.apple.mpegurl", "application/x-mpegurl", "application/dash+xml")) else 0,
+                    x.get("length", 0),
+                    x["time"],
+                ),
+                reverse=True,
+            )
         if not candidates:
             messagebox.showinfo("Musically","No accessible audio request has been detected yet. Start playback and try again.")
             return
