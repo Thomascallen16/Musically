@@ -47,6 +47,8 @@ jobs:
           Copy-Item -Force $ffmpeg portable\ffmpeg.exe
           $ffprobe = (Get-Command ffprobe).Source
           Copy-Item -Force $ffprobe portable\ffprobe.exe
+          $ffprobe = (Get-Command ffprobe).Source
+          Copy-Item -Force $ffprobe portable\ffprobe.exe
           Copy-Item -Force run_musically.bat portable\Run-Musically.bat
           Copy-Item -Force README.md portable\README.txt
 
@@ -55,6 +57,7 @@ jobs:
         run: |
           if (-not (Test-Path portable\Musically.exe)) { throw "Musically.exe missing" }
           if (-not (Test-Path portable\ffmpeg.exe)) { throw "ffmpeg.exe missing" }
+          if (-not (Test-Path portable\ffprobe.exe)) { throw "ffprobe.exe missing" }
           if (-not (Test-Path portable\ffprobe.exe)) { throw "ffprobe.exe missing" }
           if (-not (Test-Path portable\browser)) { throw "Playwright browser folder missing" }
           & portable\Musically.exe --help
