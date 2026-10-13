@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -14,7 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 from playwright.sync_api import sync_playwright
 from media_analysis import choose_candidate, inspect_dash_manifest, inspect_file, inspect_hls_manifest, media_kind
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 # Keep the Playwright browser beside the app so the whole folder can live on a USB drive.
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(ROOT / "browser"))
 DOWNLOADS = ROOT / "Downloads"
