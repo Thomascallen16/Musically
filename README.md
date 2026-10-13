@@ -46,6 +46,12 @@ If a site supplies encrypted/protected media, Musically should fail rather than 
 
 Use it only for audio you have the right or permission to save.
 
+## Native media analysis
+
+Musically includes a small, dependency-free media-analysis module. It classifies detected media, ranks candidate responses, summarizes HLS and DASH manifests, and can verify local output streams with FFprobe. The Windows USB build bundles both FFmpeg and FFprobe so the app can report whether a saved file actually contains an audio stream. If FFprobe is unavailable, Musically clearly reports that detailed validation could not be performed.
+
+Manifest inspection is descriptive only. Musically does not decrypt protected media, extract keys, or bypass access controls.
+
 ## Stem separation
 
 The **Split Selected MP3 into Stems** button is optional. The lightweight core does not bundle Demucs because its AI models are much larger. If Demucs is installed separately and available on PATH, Musically can invoke it to create separated stems.

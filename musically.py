@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -12,8 +13,9 @@ from urllib.parse import urlparse
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from playwright.sync_api import sync_playwright
+from media_analysis import choose_candidate, inspect_dash_manifest, inspect_file, inspect_hls_manifest, media_kind
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 # Keep the Playwright browser beside the app so the whole folder can live on a USB drive.
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(ROOT / "browser"))
 DOWNLOADS = ROOT / "Downloads"
@@ -138,7 +140,7 @@ class MusicallyApp:
                 if not any(x["url"] == url for x in self.media):
                     self.media.append(item)
                     self.media = self.media[-100:]
-            self.root.after(0,self.listbox.insert,tk.END,f"{ctype or 'media'} | {url[:120]}")
+            self.root.after(0,self.listbox.insert,tk.END,f"{media_kind(url, ctype)} | {ctype or 'media'} | {url[:100]}")
             self.set_status("Audio/media detected.")
         except Exception:
             pass
@@ -148,16 +150,8 @@ class MusicallyApp:
             messagebox.showinfo("Musically","Start the browser first.")
             return
         with self.lock:
-            candidates = sorted(
-                self.media,
-                key=lambda x: (
-                    1 if x["url"].lower().split("?")[0].endswith((".m3u8", ".mpd")) else 0,
-                    1 if x["content_type"].startswith(("application/vnd.apple.mpegurl", "application/x-mpegurl", "application/dash+xml")) else 0,
-                    x.get("length", 0),
-                    x["time"],
-                ),
-                reverse=True,
-            )
+            best = choose_candidate(self.media)
+            candidates = [best] if best is not None else []
         if not candidates:
             messagebox.showinfo("Musically","No accessible audio request has been detected yet. Start playback and try again.")
             return
@@ -170,7 +164,14 @@ class MusicallyApp:
         try:
             parsed = urlparse(url)
             ext = Path(parsed.path).suffix.lower()
-            if ext in {".mp3",".m4a",".aac",".wav",".flac",".ogg",".opus",".webm",".mp4"}:
+            content_type = item.get("content_type", "").split(";", 1)[0].lower()
+            if content_type.startswith("audio/") and ext not in {".mp3",".m4a",".aac",".wav",".flac",".ogg",".opus",".webm",".mp4"}:
+                ext = {
+                    "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac",
+                    "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/ogg": ".ogg",
+                    "audio/flac": ".flac", "audio/webm": ".webm",
+                }.get(content_type, ".bin")
+            if ext in {".mp3",".m4a",".aac",".wav",".flac",".ogg",".opus",".webm",".mp4"} or content_type.startswith("audio/"):
                 response = self.context.request.get(url,timeout=120000)
                 if not response.ok:
                     raise RuntimeError(f"Media request returned HTTP {response.status}")
@@ -179,6 +180,21 @@ class MusicallyApp:
                 self.finish_mp3(raw,name)
                 return
             if ext in {".m3u8",".mpd"} or "mpegurl" in item["content_type"] or "dash" in item["content_type"]:
+                # Inspect the manifest using the browser session; do not fetch keys or bypass protections.
+                manifest_response = self.context.request.get(url, timeout=30000)
+                if not manifest_response.ok:
+                    raise RuntimeError(f"Manifest request returned HTTP {manifest_response.status}")
+                manifest_text = manifest_response.body().decode("utf-8", errors="replace")
+                if ext == ".mpd" or "dash" in item["content_type"]:
+                    manifest_info = inspect_dash_manifest(manifest_text)
+                    if manifest_info.get("protected"):
+                        raise RuntimeError("This DASH manifest declares content protection. Musically will not attempt to capture it.")
+                else:
+                    manifest_info = inspect_hls_manifest(manifest_text)
+                    if manifest_info.get("encrypted_or_keyed"):
+                        raise RuntimeError("This HLS manifest declares encryption/keying. Musically will not attempt to capture it.")
+                if not manifest_info.get("valid"):
+                    raise RuntimeError(f"Manifest analysis failed: {manifest_info.get('error', 'invalid manifest')}")
                 exe = ffmpeg_path()
                 if not exe:
                     raise RuntimeError("This site supplied a streaming manifest. Install FFmpeg and put it on PATH.")
@@ -187,23 +203,36 @@ class MusicallyApp:
                 r = subprocess.run(cmd,capture_output=True,text=True,timeout=900)
                 if r.returncode != 0 or not target.exists():
                     raise RuntimeError(r.stderr.strip() or "FFmpeg could not read the stream.")
-                self.set_status(f"Saved {target.name}")
+                self.report_saved_file(target)
                 return
             raise RuntimeError("Detected media, but its format was not directly usable.")
         except Exception as e:
             self.set_status(f"Capture failed: {e}")
             self.root.after(0,lambda: messagebox.showerror("Musically",str(e)))
 
+    def report_saved_file(self, path):
+        report = inspect_file(path, ROOT)
+        if report.get("valid") is True and report.get("has_audio"):
+            streams = report.get("streams", [])
+            audio = next((stream for stream in streams if stream.get("codec_type") == "audio"), {})
+            self.set_status(f"Saved and verified {path.name} — audio stream: {audio.get('codec_name', 'audio')}")
+        elif report.get("valid") is True:
+            self.set_status(f"Saved {path.name}, but no audio stream was detected.")
+        elif report.get("valid") is False:
+            self.set_status(f"Saved {path.name}, but media validation failed: {report.get('error', 'unknown error')}")
+        else:
+            self.set_status(f"Saved {path.name}; detailed validation unavailable (FFprobe not found).")
+
     def finish_mp3(self,raw,name):
         if raw.suffix.lower() == ".mp3":
-            self.set_status(f"Saved {raw.name}")
+            self.report_saved_file(raw)
             return
         target = unique_path(DOWNLOADS,name,".mp3")
         ok,msg = ffmpeg_convert(raw,target)
         if ok:
             try: raw.unlink()
             except OSError: pass
-            self.set_status(f"Saved {target.name}")
+            self.report_saved_file(target)
         else:
             self.set_status(f"Saved original media as {raw.name}; MP3 conversion failed: {msg}")
 
