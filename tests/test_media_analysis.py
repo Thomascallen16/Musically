@@ -29,6 +29,8 @@ class MediaAnalysisTests(unittest.TestCase):
         self.assertTrue(result["valid"])
         self.assertEqual(result["representations"], 1)
         self.assertEqual(result["content_types"], ["audio"])
+        protected = '<MPD><Period><AdaptationSet><ContentProtection schemeIdUri="urn:test"/></AdaptationSet></Period></MPD>'
+        self.assertTrue(inspect_dash_manifest(protected)["protected"])
         self.assertFalse(inspect_dash_manifest("<not-mpd/>")["valid"])
 
 
