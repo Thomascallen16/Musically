@@ -164,7 +164,14 @@ class MusicallyApp:
         try:
             parsed = urlparse(url)
             ext = Path(parsed.path).suffix.lower()
-            if ext in {".mp3",".m4a",".aac",".wav",".flac",".ogg",".opus",".webm",".mp4"}:
+            content_type = item.get("content_type", "").split(";", 1)[0].lower()
+            if content_type.startswith("audio/") and ext not in {".mp3",".m4a",".aac",".wav",".flac",".ogg",".opus",".webm",".mp4"}:
+                ext = {
+                    "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac",
+                    "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/ogg": ".ogg",
+                    "audio/flac": ".flac", "audio/webm": ".webm",
+                }.get(content_type, ".bin")
+            if ext in {".mp3",".m4a",".aac",".wav",".flac",".ogg",".opus",".webm",".mp4"} or content_type.startswith("audio/"):
                 response = self.context.request.get(url,timeout=120000)
                 if not response.ok:
                     raise RuntimeError(f"Media request returned HTTP {response.status}")
