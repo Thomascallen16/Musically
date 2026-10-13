@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from playwright.sync_api import sync_playwright
-from media_analysis import choose_candidate, inspect_file, media_kind
+from media_analysis import choose_candidate, inspect_dash_manifest, inspect_file, inspect_hls_manifest, media_kind
 
 ROOT = Path(__file__).resolve().parent
 # Keep the Playwright browser beside the app so the whole folder can live on a USB drive.
@@ -172,6 +172,21 @@ class MusicallyApp:
                 self.finish_mp3(raw,name)
                 return
             if ext in {".m3u8",".mpd"} or "mpegurl" in item["content_type"] or "dash" in item["content_type"]:
+                # Inspect the manifest using the browser session; do not fetch keys or bypass protections.
+                manifest_response = self.context.request.get(url, timeout=30000)
+                if not manifest_response.ok:
+                    raise RuntimeError(f"Manifest request returned HTTP {manifest_response.status}")
+                manifest_text = manifest_response.body().decode("utf-8", errors="replace")
+                if ext == ".mpd" or "dash" in item["content_type"]:
+                    manifest_info = inspect_dash_manifest(manifest_text)
+                    if manifest_info.get("protected"):
+                        raise RuntimeError("This DASH manifest declares content protection. Musically will not attempt to capture it.")
+                else:
+                    manifest_info = inspect_hls_manifest(manifest_text)
+                    if manifest_info.get("encrypted_or_keyed"):
+                        raise RuntimeError("This HLS manifest declares encryption/keying. Musically will not attempt to capture it.")
+                if not manifest_info.get("valid"):
+                    raise RuntimeError(f"Manifest analysis failed: {manifest_info.get('error', 'invalid manifest')}")
                 exe = ffmpeg_path()
                 if not exe:
                     raise RuntimeError("This site supplied a streaming manifest. Install FFmpeg and put it on PATH.")
