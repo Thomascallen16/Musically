@@ -39,7 +39,10 @@ def inspect_hls_manifest(text: str) -> dict:
         "kind": "hls",
         "variants": sum(line.startswith("#EXT-X-STREAM-INF:") for line in lines),
         "segments": sum(not line.startswith("#") for line in lines),
-        "encrypted_or_keyed": any(line.startswith("#EXT-X-KEY:") and "METHOD=NONE" not in line for line in lines),
+        "encrypted_or_keyed": any(
+            line.startswith(("#EXT-X-KEY:", "#EXT-X-SESSION-KEY:")) and "METHOD=NONE" not in line
+            for line in lines
+        ),
     }
 
 
