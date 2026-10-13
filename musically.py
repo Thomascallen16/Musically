@@ -193,6 +193,8 @@ class MusicallyApp:
             streams = report.get("streams", [])
             audio = next((stream for stream in streams if stream.get("codec_type") == "audio"), {})
             self.set_status(f"Saved and verified {path.name} — audio stream: {audio.get('codec_name', 'audio')}")
+        elif report.get("valid") is True:
+            self.set_status(f"Saved {path.name}, but no audio stream was detected.")
         elif report.get("valid") is False:
             self.set_status(f"Saved {path.name}, but media validation failed: {report.get('error', 'unknown error')}")
         else:
