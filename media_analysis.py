@@ -58,6 +58,7 @@ def inspect_dash_manifest(text: str) -> dict:
         "valid": True, "kind": "dash", "adaptation_sets": len(adaptations),
         "representations": len(representations),
         "content_types": sorted({n.attrib["contentType"].lower() for n in adaptations if n.attrib.get("contentType")}),
+        "protected": any(n.tag.rsplit("}", 1)[-1] == "ContentProtection" for n in nodes),
     }
 
 
