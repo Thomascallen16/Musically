@@ -27,6 +27,7 @@ jobs:
       - name: Install Playwright Chromium beside the package
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force portable\browser | Out-Null
           $env:PLAYWRIGHT_BROWSERS_PATH = "$PWD\portable\browser"
           python -m playwright install chromium
 
@@ -57,8 +58,8 @@ jobs:
           if (-not (Test-Path portable\ffmpeg.exe)) { throw "ffmpeg.exe missing" }
           if (-not (Test-Path portable\ffprobe.exe)) { throw "ffprobe.exe missing" }
           if (-not (Test-Path portable\browser)) { throw "Playwright browser folder missing" }
-          & portable\Musically.exe --help
-          if ($LASTEXITCODE -ne 0) { Write-Host "Executable launched with expected GUI behavior; command-line help is not required." }
+          if (-not (Get-ChildItem portable\browser -Recurse -Filter chrome.exe -ErrorAction SilentlyContinue)) { throw "Chromium executable missing from browser folder" }
+          Write-Host "Portable package layout verified."
 
       - name: Zip USB package
         shell: pwsh
