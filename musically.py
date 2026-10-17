@@ -126,8 +126,21 @@ class MusicallyApp:
             headers = response.headers
             ctype = (headers.get("content-type") or "").lower()
             url = response.url
-            path = urlparse(url).path.lower()
-            is_audio = any(ctype.startswith(t) for t in AUDIO_TYPES) or any(path.endswith(ext) for ext in AUDIO_EXTS)
+            parsed_url = urlparse(url)
+            path = parsed_url.path.lower()
+            resource_type = response.request.resource_type
+            disposition = (headers.get("content-disposition") or "").lower()
+            path_hint = any(token in (path + " " + parsed_url.query.lower()) for token in ("audio", "song", "stream", "media", "playback"))
+            # Some legitimate players serve audio from extensionless media URLs or
+            # label it as octet-stream. Recognize browser media requests and
+            # explicit audio filenames without treating every binary API call as audio.
+            is_audio = (
+                any(ctype.startswith(t) for t in AUDIO_TYPES)
+                or any(path.endswith(ext) for ext in AUDIO_EXTS)
+                or resource_type == "media"
+                or ("application/octet-stream" in ctype and path_hint)
+                or ("filename=" in disposition and any(ext in disposition for ext in AUDIO_EXTS))
+            )
             if not is_audio:
                 return
             length = 0
@@ -135,7 +148,7 @@ class MusicallyApp:
                 length = int(headers.get("content-length") or 0)
             except (TypeError, ValueError):
                 pass
-            item = {"url":url,"content_type":ctype,"time":time.time(),"status":response.status,"length":length}
+            item = {"url":url,"content_type":ctype,"resource_type":resource_type,"time":time.time(),"status":response.status,"length":length}
             with self.lock:
                 if not any(x["url"] == url for x in self.media):
                     self.media.append(item)
@@ -171,7 +184,9 @@ class MusicallyApp:
                     "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/ogg": ".ogg",
                     "audio/flac": ".flac", "audio/webm": ".webm",
                 }.get(content_type, ".bin")
-            if ext in {".mp3",".m4a",".aac",".wav",".flac",".ogg",".opus",".webm",".mp4"} or content_type.startswith("audio/"):
+            if item.get("resource_type") == "media" and ext not in AUDIO_EXTS:
+                ext = ".bin"
+            if ext in {".mp3",".m4a",".aac",".wav",".flac",".ogg",".opus",".webm",".mp4"} or content_type.startswith("audio/") or item.get("resource_type") == "media":
                 response = self.context.request.get(url,timeout=120000)
                 if not response.ok:
                     raise RuntimeError(f"Media request returned HTTP {response.status}")
